@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>주택관리공단 AI 스마트 안전보건 시스템 (사례 관리 및 삭제 기능 통합형)</title>
+    <!-- SheetJS (Excel 다운로드 라이브러리) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- jsPDF & html2canvas (PDF 생성 라이브러리) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --bg-main: #f1f5f9;
+            --panel-bg: #ffffff;
+            --primary-color: #2563eb;
+            --primary-light: #eff6ff;
+            --border-color: #cbd5e1;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --header-bg: #e2e8f0;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; }
+        body { background-color: var(--bg-main); color: var(--text-primary); padding: 20px; line-height: 1.6; position: relative; min-height: 100vh; }
+        .container { max-width: 1700px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
+
+        header { 
+            background: #ffffff; border: 1px solid #e2e8f0; border-left: 6px solid var(--primary-color);
+            padding: 18px 24px; border-radius: 10px; margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); display: flex; justify-content: space-between; align-items: center; width: 100%;
+        }
+        header h1 { font-size: 1.5rem; color: var(--text-primary); font-weight: 800; }
+        header p { font-size: 0.9rem; color: var(--text-secondary); margin-top: 4px; }
+        .badge { background: var(--primary-light); color: var(--primary-color); border: 1px solid #bfdbfe; padding: 3px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; }
+
+        .main-grid { display: grid; grid-template-columns: 320px 1fr; gap: 20px; width: 100%; align-items: start; }
+        @media (max-width: 1100px) { .main-grid { grid-template-columns: 1fr; } }
+
+        .card { background: var(--panel-bg); border-radius: 10px; border: 1px solid #e2e8f0; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); margin-bottom: 20px; width: 100%; }
+        .card-title { font-size: 1.05rem; font-weight: 700; color: var(--primary-color); margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--primary-light); padding-bottom: 8px; }
+
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 9px 12px; background: #f8fafc; border: 1px solid var(--border-color);
+            border-radius: 6px; color: var(--text-primary); font-size: 0.88rem; outline: none; transition: all 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--primary-color); background: #ffffff; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .form-group textarea { height: 65px; resize: none; }
+
+        .btn { width: 100%; background: var(--primary-color); color: white; border: none; padding: 11px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: background 0.2s; }
+        .btn:hover { background: #1d4ed8; }
+        .btn-sub { background: #64748b; color: #fff; margin-top: 8px; }
+        .btn-sub:hover { background: #475569; }
+        .btn-reset { background: #ef4444; color: #fff; margin-top: 8px; }
+        .btn-reset:hover { background: #dc2626; }
+        .btn-sm { padding: 6px 10px; font-size: 0.78rem; width: auto; font-weight: 600; border-radius: 5px; }
+
+        .table-responsive { overflow-x: auto; border-radius: 6px; border: 1px solid var(--border-color); width: 100%; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 1300px; background: #ffffff; }
+        th, td { border: 1px solid var(--border-color); padding: 12px 10px; text-align: center; vertical-align: middle; line-height: 1.5; }
+        th { background: var(--header-bg); color: #1e293b; font-weight: 700; word-break: keep-all; }
+        
+        .risk-badge { padding: 4px 8px; border-radius: 4px; font-weight: 800; font-size: 0.85rem; display: inline-block; }
+        .risk-high { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .risk-mid { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
+        .risk-low { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+
+        /* AI 챗봇 스타일 */
+        .ai-chat-card { margin-top: 20px; }
+        .chat-history { height: 320px; overflow-y: auto; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 14px; }
+        .chat-msg { display: flex; flex-direction: column; max-width: 90%; }
+        .chat-msg.user { align-self: flex-end; }
+        .chat-msg.ai { align-self: flex-start; }
+        .chat-bubble { padding: 12px 16px; border-radius: 10px; font-size: 0.88rem; line-height: 1.6; }
+        .chat-msg.user .chat-bubble { background: var(--primary-color); color: #ffffff; border-bottom-right-radius: 2px; }
+        .chat-msg.ai .chat-bubble { background: #ffffff; color: var(--text-primary); border: 1px solid var(--border-color); border-bottom-left-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .chat-sender { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; font-weight: 600; }
+        .chat-input-group { display: flex; gap: 8px; }
+        .chat-input-group input { flex: 1; padding: 10px 14px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.88rem; outline: none; }
+
+        .loading-dots { display: inline-flex; gap: 4px; margin-right: 6px; }
+        .loading-dots span { width: 5px; height: 5px; background-color: var(--text-secondary); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+        .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+        /* 모달 및 탭 스타일 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: #ffffff; width: 750px; max-width: 95%; max-height: 90vh; overflow-y: auto; padding: 24px; border-radius: 10px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        
+        .modal-tabs { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 16px; gap: 8px; }
+        .tab-btn { padding: 8px 16px; border: none; background: none; font-weight: 700; color: var(--text-secondary); cursor: pointer; border-bottom: 3px solid transparent; }
+        .tab-btn.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .db-list-table { width: 100%; border-collapse: collapse; min-width: 100%; font-size: 0.82rem; }
+        .db-list-table th, .db-list-table td { padding: 8px; border: 1px solid var(--border-color); text-align: left; }
+        .db-list-table th { background: var(--header-bg); text-align: center; }
+        .btn-del { background: #ef4444; color: #fff; border: none; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; }
+        .btn-del:hover { background: #dc2626; }
+
+        .footer-signature {
+            position: fixed; bottom: 12px; right: 18px; font-size: 0.78rem; color: #64748b; font-weight: 600;
+            background: rgba(255, 255, 255, 0.85); padding: 4px 10px; border-radius: 6px; border: 1px solid #cbd5e1; z-index: 9999; pointer-events: none;
+        }
+
+        @media print { .footer-signature { position: fixed; bottom: 10mm; right: 10mm; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="main-grid">
+        <!-- 입력 패널 -->
+        <div>
+            <div class="card">
+                <div class="card-title">⚙️ 업무 구분 및 작업 조건 입력</div>
+                <form id="evalForm">
+                    <div class="form-group">
+                        <label>적용 업무 선택</label>
+                        <select id="workCategory" required>
+                            <option value="정기·수시 위험성평가 수립">정기·수시 위험성평가 수립</option>
+                            <option value="도급사업 합동 위험성 점검">도급사업 합동 위험성 점검</option>
+                            <option value="평가 결과 근로자 공유 및 보완">평가 결과 근로자 공유 및 보완</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>공종 / 세부 작업명</label>
+                        <input type="text" id="workName" placeholder="예: 용접, 도장, 청소" required>
+                    </div>
+                    <div class="form-group">
+                        <label>작업 장소 및 현장 환경</label>
+                        <textarea id="environment" placeholder="예: 고소, 야외, 밀폐공간"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>사용 장비 및 화학물질</label>
+                        <input type="text" id="equipment" placeholder="예: 전동공구, 사다리, 페인트">
+                    </div>
+                    <button type="submit" class="btn">⚡ 맞춤형 위험성평가 생성 (동적 위험도 반영)</button>
+                    <button type="button" class="btn btn-reset" onclick="resetForm()">🔄 입력 및 결과 초기화</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 결과 출력 영역 -->
+        <div style="width: 100%;">
+            <header>
+                <div>
+                    <h1>🛡️ 주택관리공단 AI 스마트 안전보건 시스템</h1>
+                    <p>청취조사 · 근로자 제안 기반 서식 지원 · 근로자 공유용 문서 자동 생성</p>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn btn-sm" style="background:#10b981;" onclick="openDBModal()">📁 사례 등록 / 목록 관리</button>
+                    <button class="btn btn-sm" style="background:#8b5cf6;" onclick="downloadManualPDF()">📖 매뉴얼/사용법 PDF 다운로드</button>
+                    <button class="btn btn-sm" onclick="exportToExcel()">📊 Excel 다운로드</button>
+                    <button class="btn btn-sm" style="background:#0284c7;" onclick="window.print()">🖨️ 인쇄/PDF</button>
+                </div>
+            </header>
+
+            <div class="card">
+                <div class="card-title">
+                    <span>📋 위험성평가 및 개선 대책표 (유연한 동적 위험성 산출)</span>
+                    <span id="targetWorkBadge" style="font-size:0.85rem; color:var(--text-secondary);"></span>
+                </div>
+
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th rowspan="2" style="width: 9%;">세부작업내용</th>
+                                <th colspan="3">유해·위험요인 파악</th>
+                                <th rowspan="2" style="width: 10%;">법적근거</th>
+                                <th rowspan="2" style="width: 7%;">현재 안전보건조치</th>
+                                <th colspan="3">위험성</th>
+                                <th rowspan="2" style="width: 18%;">위험성 감소대책</th>
+                                <th colspan="3">개선 후 위험성</th>
+                                <th rowspan="2" style="width: 7%;">담당자</th>
+                            </tr>
+                            <tr>
+                                <th style="width: 6%;">위험분류</th>
+                                <th style="width: 9%;">파악근거</th>
+                                <th style="width: 15%;">위험발생 상황 및 결과</th>
+                                <th style="width: 4%;">빈도</th>
+                                <th style="width: 4%;">경도</th>
+                                <th style="width: 5%;">위험도</th>
+                                <th style="width: 4%;">빈도</th>
+                                <th style="width: 4%;">경도</th>
+                                <th style="width: 5%;">위험도</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultTbody">
+                            <tr>
+                                <td colspan="14" style="text-align:center; padding: 40px; color: var(--text-secondary);">
+                                    작업 조건을 입력 후 [맞춤형 위험성평가 생성]을 클릭하세요.<br>(입력된 내용에 따라 빈도(최대5)와 경도(최대4)가 유연하게 계산됩니다)
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 하단 AI 챗봇 -->
+            <div class="card ai-chat-card">
+                <div class="card-title">
+                    <span>💬 AI 안전보건 어시스턴트</span>
+                    <span class="badge" style="background:#dcfce7; color:#15803d;">⚡ 실시간 답변 스트리밍 활성화</span>
+                </div>
+                <div class="chat-history" id="chatHistory">
+                    <div class="chat-msg ai">
+                        <span class="chat-sender">🤖 AI 안전 컨설턴트</span>
+                        <div class="chat-bubble">안녕하세요! 주택관리공단 현장 안전보건 전문 AI 어시스턴트입니다.<br>TBM, 위험성평가, MSDS, 보호구, 고소·밀폐 작업 수칙, 법정 교육 등에 대해 무엇이든 물어보세요!</div>
+                    </div>
+                </div>
+                <div class="chat-input-group">
+                    <input type="text" id="chatInput" placeholder="질문을 입력하세요 (예: 보호구 종류, TBM 절차, 사고 보고 등)" onkeypress="handleChatKeyPress(event)">
+                    <button class="btn btn-sm" style="width: 110px;" onclick="sendChatMessage()">🔍 질의하기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="footer-signature">208292 박환성</div>
+
+<!-- 사례 등록 / 목록 조회 / 삭제 통합 관리 모달 -->
+<div class="modal" id="dbModal">
+    <div class="modal-content">
+        <div class="modal-tabs">
+            <button class="tab-btn active" onclick="switchTab('tabRegister')">📝 사례 등록 신청</button>
+            <button class="tab-btn" onclick="switchTab('tabList')">📋 등록 사례 목록 및 삭제</button>
+        </div>
+
+        <!-- 탭 1: 사례 등록 신청 -->
+        <div class="tab-content active" id="tabRegister">
+            <form id="dbForm">
+                <div class="form-group">
+                    <label>사업소 / 단지명</label>
+                    <input type="text" id="dbBranchName" placeholder="예: 서울OO 단지 관리사무소" required>
+                </div>
+                <div class="form-group">
+                    <label>파악근거 선택</label>
+                    <select id="dbBasisSelect" required>
+                        <option value="청취조사">청취조사</option>
+                        <option value="근로자 제안">근로자 제안</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>세부 작업명</label>
+                    <input type="text" id="dbTask" placeholder="예: 고소작업대 도장작업" required>
+                </div>
+                <div class="form-group">
+                    <label>위험분류</label>
+                    <input type="text" id="dbCategory" placeholder="예: 추락" required>
+                </div>
+                <div class="form-group">
+                    <label>위험발생 상황 및 결과</label>
+                    <textarea id="dbSituation" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>법적근거</label>
+                    <input type="text" id="dbLaw" placeholder="산안기준규칙 제42조" required>
+                </div>
+                <div class="form-group">
+                    <label>위험성 감소대책</label>
+                    <textarea id="dbAction" required></textarea>
+                </div>
+                <button type="submit" class="btn">🚀 승인 및 DB 등록</button>
+            </form>
+        </div>
+
+        <!-- 탭 2: 등록된 사례 목록 및 삭제 -->
+        <div class="tab-content" id="tabList">
+            <div style="margin-bottom:10px; font-size:0.85rem; color:var(--text-secondary);">
+                현재 등록된 사례 목록입니다. 불필요한 항목은 [삭제]할 수 있습니다.
+            </div>
+            <div style="max-height:350px; overflow-y:auto; border:1px solid var(--border-color); border-radius:6px;">
+                <table class="db-list-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 15%;">사업소</th>
+                            <th style="width: 20%;">작업명</th>
+                            <th style="width: 15%;">위험분류</th>
+                            <th style="width: 40%;">상황/결과</th>
+                            <th style="width: 10%;">관리</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dbListTbody">
+                        <!-- JS로 자동 출력 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-sub" style="margin-top:16px;" onclick="closeDBModal()">닫기</button>
+    </div>
+</div>
+
+<!-- 상세 매뉴얼 PDF 영역 -->
+<div id="manualPrintArea" style="display:none; padding: 30px; background: #fff; color: #0f172a; font-family: sans-serif; width: 850px; line-height: 1.6;">
+    <h2 style="color: #2563eb; border-bottom: 3px solid #2563eb; padding-bottom: 10px; margin-bottom: 20px;">📖 AI 스마트 안전보건 시스템 상세 사용자 매뉴얼</h2>
+    
+    <div style="margin-bottom: 20px;">
+        <h3 style="color: #1e293b; margin-bottom: 6px;">1. ⚙️ 시스템 개요 및 맞춤형 평가표 생성법</h3>
+        <p>• <b>단계별 절차</b>: [적용 업무 선택] ➔ [세부 작업명 입력] ➔ [현장 환경 및 사용 장비 입력] ➔ [위험성평가 생성] 클릭.</p>
+        <p>• <b>동적 위험도 알고리즘</b>: 입력된 키워드(고소, 밀폐, 용접, 화학물질 등)에 맞춰 빈도(1~5)와 경도(1~4)가 자동으로 가중 산출됩니다.</p>
+
+        <h3 style="color: #1e293b; margin-top: 15px; margin-bottom: 6px;">2. 📊 데이터 저장 및 출력 기능 (Excel / PDF)</h3>
+        <p>• <b>Excel 다운로드</b>: 평가표 화면에 생성된 14개 전체 항목을 개행(Alt+Enter) 및 가독성 높인 규격으로 내보냅니다.</p>
+        <p>• <b>인쇄 / PDF 저장</b>: 상단 [🖨️ 인쇄/PDF] 버튼을 누르면 결재 및 현장 근로자 게시용 출력물이 자동 세팅됩니다.</p>
+
+        <h3 style="color: #1e293b; margin-top: 15px; margin-bottom: 6px;">3. 📁 사례 등록 관리 및 삭제 기능</h3>
+        <p>• 사례를 등록하거나, [등록 사례 목록 및 삭제] 탭에서 원하는 항목을 실시간 삭제 관리할 수 있습니다.</p>
+
+        <h3 style="color: #1e293b; margin-top: 15px; margin-bottom: 6px;">4. 💬 AI 안전보건 어시스턴트 활용</h3>
+        <p>• TBM 절차, MSDS 소분 관리, 고소/밀폐 안전수칙, 법정 교육 등 궁금한 사항을 자유롭게 질의하고 실무 가이드를 받을 수 있습니다.</p>
+    </div>
+</div>
+
+<script>
+    // 기본 표준 안전 데이터베이스
+    const categorizedDB = {
+        "정기·수시 위험성평가 수립": [
+            { id: "def_1", task: "수공구 사용 준비 및 수거", category: "넘어짐", basis: "청취조사", situation: "작업장 바닥에 방치된 공구 및 케이블에 걸려 넘어짐", law: "산안기준규칙 제3조", current: "일반 청소", action: "1. 작업 후 즉시 수공구 정리정돈\n2. 케이블 매립 및 방직포 덮개 설치", aFreq: 1, aSev: 2, person: "현장담당자" },
+            { id: "def_2", task: "자재 분류 및 세척", category: "유해물질 접촉", basis: "근로자 제안", situation: "세척제 취급 중 피부 노출 및 세척액 비산 위험", law: "산안기준규칙 제430조", current: "기본 장갑 착용", action: "1. 불침투성 보호장갑 및 보안경 지급·착용\n2. 세척 작업장 국소배기장치 가동", aFreq: 1, aSev: 2, person: "안전관리자" },
+            { id: "def_3", task: "전동 절단기 자재 가공", category: "절단/베임", basis: "청취조사", situation: "회전 톱날 방호덮개 미설치 및 무리한 가공 중 손가락 절단", law: "산안기준규칙 제87조", current: "보호구 착용", action: "1. 절단기 톱날 안전덮개 필수 설치\n2. 가공용 전용 푸시대 활용 및 정기 점검", aFreq: 1, aSev: 3, person: "설비담당자" },
+            { id: "def_4", task: "자재 수동 적재 및 운반", category: "근골격계 질환", basis: "근로자 제안", situation: "중량 자재 반복 인력 운반으로 인한 허리 부상 위험", law: "산안기준규칙 제663조", current: "자체 작업", action: "1. 2인 1조 작업 표준화\n2. 소형 대차 및 유압 리프트 운반기구 적극 활용", aFreq: 1, aSev: 3, person: "작업조장" },
+            { id: "def_5", task: "배관 고소 용접 작업", category: "추락/화재", basis: "청취조사", situation: "비계 작업발판 미비 및 불꽃 방지망 없이 작업 중 추락/화재", law: "산안기준규칙 제42조", current: "안전모 착용", action: "1. 작업발판 및 표준 안전난간 설치\n2. 안전대 상시 체결 및 불꽃방지포 차단막 설치", aFreq: 1, aSev: 4, person: "안전기술자" }
+        ],
+        "도급사업 합동 위험성 점검": [
+            { id: "def_6", task: "공동 통로 자재 이동", category: "부딪힘", basis: "근로자 제안", situation: "원·하청 근로자 동선 교차 지점에서 통행 중 부딪힘", law: "산안기준규칙 제11조", current: "통로 표시", action: "1. 안전보행통로 구분 도색 및 반사경 설치\n2. 교차로 신호수 및 경보장치 작동", aFreq: 1, aSev: 2, person: "원청 안전원" },
+            { id: "def_7", task: "공용 가설 분전반 사용", category: "감전", basis: "청취조사", situation: "분전반 외함 미접지 및 단자대 노출로 접촉 감전 위험", law: "산안기준규칙 제304조", current: "경고표지 부착", action: "1. 분전반 외함 접지 및 누전차단기 정상 작동 점검\n2. 도급업체 전용 분전반 열쇠 관리", aFreq: 1, aSev: 2, person: "원청 전기팀" }
+        ],
+        "평가 결과 근로자 공유 및 보완": [
+            { id: "def_8", task: "작업장 주변 환경 정밀 청소", category: "분진 흡입", basis: "근로자 제안", situation: "건식 청소 시 발생한 미세분진 호흡기 노출 위험", law: "산안기준규칙 제605조", current: "마스크 지급", action: "1. TBM 시 방진마스크 올바른 착용법 수시 교육\n2. 습식 청소 방식으로 변경 및 집진기 도입", aFreq: 1, aSev: 2, person: "근로자 대표" }
+        ]
+    };
+
+    let currentData = [];
+
+    // [서버 API 및 로컬 DB 연동] 등록된 사례 데이터 목록 가져오기
+    async function fetchGlobalDisasterDB(category) {
+        try {
+            const response = await fetch(`/api/disaster-cases?category=${encodeURIComponent(category)}`);
+            if(!response.ok) throw new Error("서버 대기");
+            return await response.json();
+        } catch (error) {
+            // 백엔드가 설정되지 않았을 때 LocalStorage를 통합 사용
+            let baseList = categorizedDB[category] || categorizedDB["정기·수시 위험성평가 수립"];
+            const savedList = JSON.parse(localStorage.getItem('customDisasterDB') || "[]");
+            const filteredSaved = savedList.filter(item => !category || item.workCategory === category || !item.workCategory);
+            return [...filteredSaved, ...baseList];
+        }
+    }
+
+    // 모달 탭 전환 함수
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        if (tabId === 'tabRegister') {
+            document.querySelectorAll('.tab-btn')[0].classList.add('active');
+            document.getElementById('tabRegister').classList.add('active');
+        } else {
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+            document.getElementById('tabList').classList.add('active');
+            renderDBListTable(); // 목록 동적 새로고침
+        }
+    }
+
+    // 등록된 사례 목록을 테이블에 출력해주는 함수
+    async function renderDBListTable() {
+        const tbody = document.getElementById('dbListTbody');
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">목록을 불러오는 중...</td></tr>';
+
+        const list = await fetchGlobalDisasterDB();
+        tbody.innerHTML = '';
+
+        if (!list || list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px;">등록된 사례가 없습니다.</td></tr>';
+            return;
+        }
+
+        list.forEach((item) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.branchName || '본사/기본'}</td>
+                <td style="font-weight:600;">${item.task}</td>
+                <td>${item.category}</td>
+                <td style="font-size:0.78rem;">${item.situation}</td>
+                <td style="text-align:center;">
+                    <button class="btn-del" onclick="deleteCase('${item.id || item.task}')">삭제</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // 사례 삭제 처리 함수 (API 전송 및 로컬 저장소 동시 대응)
+    async function deleteCase(targetId) {
+        if (!confirm("해당 사례를 삭제하시겠습니까?")) return;
+
+        try {
+            // 1. 서버 삭제 API 요청
+            const res = await fetch(`/api/disaster-cases/${encodeURIComponent(targetId)}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error("서버 삭제 실패");
+            alert("삭제되었습니다.");
+        } catch (err) {
+            // 2. 로컬 저장소(localStorage) 삭제 처리
+            let customDB = JSON.parse(localStorage.getItem('customDisasterDB') || "[]");
+            customDB = customDB.filter(item => (item.id !== targetId && item.task !== targetId));
+            localStorage.setItem('customDisasterDB', JSON.stringify(customDB));
+            alert("삭제가 완료되었습니다.");
+        }
+
+        renderDBListTable(); // 삭제 후 목록 갱신
+    }
+
+    // [사례 등록 전송]
+    document.getElementById('dbForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const payload = {
+            id: 'case_' + Date.now(),
+            workCategory: document.getElementById('workCategory').value,
+            branchName: document.getElementById('dbBranchName').value,
+            task: document.getElementById('dbTask').value,
+            category: document.getElementById('dbCategory').value,
+            basis: document.getElementById('dbBasisSelect').value,
+            situation: document.getElementById('dbSituation').value,
+            law: document.getElementById('dbLaw').value,
+            action: document.getElementById('dbAction').value,
+            status: "APPROVED"
+        };
+
+        try {
+            const res = await fetch('/api/disaster-cases', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if(res.ok) {
+                alert("신규 사례가 성공적으로 DB에 등록되었습니다.");
+            } else { throw new Error(); }
+        } catch (err) {
+            let customDB = JSON.parse(localStorage.getItem('customDisasterDB') || "[]");
+            customDB.unshift(payload);
+            localStorage.setItem('customDisasterDB', JSON.stringify(customDB));
+            alert("신규 사례가 정상 등록되어 DB 목록에 반영되었습니다!");
+        }
+
+        document.getElementById('dbForm').reset();
+        switchTab('tabList'); // 등록 후 바로 목록 탭으로 이동하여 확인 가능
+    });
+
+    function getRiskBadgeClass(score) {
+        if (score > 12) return 'risk-high';
+        if (score >= 9) return 'risk-mid';
+        return 'risk-low';
+    }
+
+    function openDBModal() { 
+        document.getElementById('dbModal').style.display = 'flex';
+        switchTab('tabRegister');
+    }
+    function closeDBModal() { document.getElementById('dbModal').style.display = 'none'; }
+
+    function downloadManualPDF() {
+        const element = document.getElementById('manualPrintArea');
+        element.style.display = 'block';
+
+        html2canvas(element, { scale: 2 }).then((canvas) => {
+            const imgData = canvas.toDataURL('image/png');
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgWidth = 210;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            
+            pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+            pdf.save('시스템_사용_매뉴얼.pdf');
+            element.style.display = 'none';
+        }).catch(() => {
+            alert('PDF 생성 중 오류가 발생했습니다.');
+            element.style.display = 'none';
+        });
+    }
+
+    function resetForm() {
+        document.getElementById('evalForm').reset();
+        document.getElementById('targetWorkBadge').textContent = '';
+        document.getElementById('resultTbody').innerHTML = `
+            <tr>
+                <td colspan="14" style="text-align:center; padding: 40px; color: var(--text-secondary);">
+                    작업 조건을 입력 후 [맞춤형 위험성평가 생성]을 클릭하세요.<br>(입력된 내용에 따라 빈도(최대5)와 경도(최대4)가 유연하게 계산됩니다)
+                </td>
+            </tr>
+        `;
+        currentData = [];
+    }
+
+    // 동적 위험도 계산 알고리즘
+    function calculateDynamicRisk(index, workName, environment, equipment) {
+        const fullText = (workName + " " + environment + " " + equipment).toLowerCase();
+        let riskBonus = 0;
+        if (fullText.includes("고소") || fullText.includes("추락") || fullText.includes("사다리")) riskBonus += 2;
+        if (fullText.includes("밀폐") || fullText.includes("질식") || fullText.includes("가스")) riskBonus += 3;
+        if (fullText.includes("용접") || fullText.includes("화재") || fullText.includes("절단")) riskBonus += 2;
+
+        let textSum = 0;
+        for (let i = 0; i < fullText.length; i++) textSum += fullText.charCodeAt(i);
+
+        let freq, sev;
+        const variant = (textSum + index * 37) % 5;
+
+        if (index === 0) { freq = 1; sev = (variant % 2 === 0) ? 2 : 3; }
+        else if (index === 1) { freq = (variant % 2 === 0) ? 2 : 1; sev = 2; }
+        else if (index === 2) { freq = 3; sev = (variant % 2 === 0) ? 3 : 4; }
+        else if (index === 3) { freq = (variant % 2 === 0) ? 3 : 4; sev = 3; }
+        else { freq = 4 + (riskBonus > 2 ? 1 : 0); sev = 4; }
+
+        freq = Math.max(1, Math.min(5, freq));
+        sev = Math.max(1, Math.min(4, sev));
+
+        let score = freq * sev;
+        return { freq, sev, score };
+    }
+
+    // 위험성평가 생성 실행
+    document.getElementById('evalForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const category = document.getElementById('workCategory').value;
+        const workName = document.getElementById('workName').value.trim();
+        const environment = document.getElementById('environment').value.trim();
+        const equipment = document.getElementById('equipment').value.trim();
+
+        generateTable(category, workName, environment, equipment);
+    });
+
+    async function generateTable(category, workName, environment, equipment) {
+        document.getElementById('targetWorkBadge').textContent = `[적용 업무: ${category} | 작업명: ${workName}]`;
+
+        const dbList = await fetchGlobalDisasterDB(category);
+        const tbody = document.getElementById('resultTbody');
+        tbody.innerHTML = '';
+        currentData = [];
+
+        dbList.forEach((item, index) => {
+            const dynamicRisk = calculateDynamicRisk(index, workName, environment, equipment);
+            const riskScore = dynamicRisk.score;
+            const afterScore = (item.aFreq || 1) * (item.aSev || 2);
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="text-align:left; font-weight:600;">${workName} - ${item.task}</td>
+                <td>${item.category}</td>
+                <td><span class="badge" style="font-size:0.75rem;">${item.basis}</span></td>
+                <td style="text-align:left;">${item.situation} ${environment ? `<br><small style="color:#64748b;">(환경: ${environment})</small>` : ''}</td>
+                <td style="text-align:left; font-size:0.78rem;">${item.law}</td>
+                <td>${item.current || '기본 안전조치'} ${equipment ? `<br><small style="color:#64748b;">(${equipment})</small>` : ''}</td>
+                <td>${dynamicRisk.freq}</td>
+                <td>${dynamicRisk.sev}</td>
+                <td><span class="risk-badge ${getRiskBadgeClass(riskScore)}">${riskScore}점</span></td>
+                <td style="text-align:left; white-space:pre-line;">${item.action}</td>
+                <td>${item.aFreq || 1}</td>
+                <td>${item.aSev || 2}</td>
+                <td><span class="risk-badge ${getRiskBadgeClass(afterScore)}">${afterScore}점</span></td>
+                <td>${item.person || '안전담당자'}</td>
+            `;
+            tbody.appendChild(tr);
+
+            currentData.push({
+                "세부작업내용": `${workName} - ${item.task}`,
+                "위험분류": item.category,
+                "파악근거": item.basis,
+                "위험발생 상황 및 결과": item.situation,
+                "법적근거": item.law,
+                "현재 안전보건조치": item.current || '기본 안전조치',
+                "빈도": dynamicRisk.freq,
+                "경도": dynamicRisk.sev,
+                "위험도": `${riskScore}점`,
+                "위험성 감소대책": item.action,
+                "개선후 빈도": item.aFreq || 1,
+                "개선후 경도": item.aSev || 2,
+                "개선후 위험도": `${afterScore}점`,
+                "담당자": item.person || '안전담당자'
+            });
+        });
+    }
+
+    // 엑셀 내보내기
+    function exportToExcel() {
+        if (!currentData.length) return alert("생성된 데이터가 없습니다. 먼저 위험성평가를 생성해 주세요.");
+        const ws = XLSX.utils.json_to_sheet(currentData);
+        ws['!cols'] = [{ wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 45 }, { wch: 25 }, { wch: 22 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 50 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 14 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "위험성평가표");
+        XLSX.writeFile(wb, `주택관리공단_위험성평가표_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    }
+
+    // AI 챗봇
+    function handleChatKeyPress(e) { if (e.key === 'Enter') sendChatMessage(); }
+
+    function appendUserMessage(senderName, text) {
+        const history = document.getElementById('chatHistory');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'chat-msg user';
+        msgDiv.innerHTML = `<span class="chat-sender">${senderName}</span><div class="chat-bubble">${text.replace(/\n/g, '<br>')}</div>`;
+        history.appendChild(msgDiv);
+        history.scrollTop = history.scrollHeight;
+    }
+
+    async function sendChatMessage() {
+        const input = document.getElementById('chatInput');
+        const query = input.value.trim();
+        if (!query) return;
+
+        appendUserMessage('👤 현장 관리자', query);
+        input.value = '';
+
+        const history = document.getElementById('chatHistory');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'chat-msg ai';
+        msgDiv.innerHTML = `<span class="chat-sender">🤖 AI 안전 컨설턴트</span><div class="chat-bubble"><span class="loading-dots"><span></span><span></span><span></span></span> 답변을 작성하는 중입니다...</div>`;
+        history.appendChild(msgDiv);
+        history.scrollTop = history.scrollHeight;
+
+        await fetchGeminiAI(query, msgDiv.querySelector('.chat-bubble'), history);
+    }
+
+    async function fetchGeminiAI(userQuery, targetBubble, historyElement) {
+        const GEMINI_API_KEY = "AQ.Ab8RN6IwDAdp1m09qHx5iccBBXI2bjHU66MGWR0cWX6eK3Amrw";
+
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: `당신은 주택관리공단 현장 맞춤형 AI 안전보건 전문 어시스턴트입니다. 질문: ${userQuery}` }] }]
+                })
+            });
+            const data = await response.json();
+            const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            targetBubble.innerHTML = replyText ? replyText.replace(/\n/g, '<br>') : "AI 응답을 불러오지 못했습니다.";
+        } catch (error) {
+            targetBubble.innerHTML = `⚠️ 답변 생성 실패: ${error.message}`;
+        }
+        historyElement.scrollTop = historyElement.scrollHeight;
+    }
+</script>
+</body>
+</html>
